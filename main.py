@@ -4,43 +4,54 @@ import pandas as pd
 import time
 import os
 
-COMPANIES = ["BlackRock", "Vanguard", "State Street", "Fidelity Investments", "Capital Group"]
+COMPANIES = [
+    "Royal Bank of Canada",
+    "TCW",
+    "Lincoln Financial",
+    "Natixis",
+    "AssetMark",
+    "Aristotle",
+    "Pathstone",
+    "Fidelity",
+    "Orion",
+    "NEPC",
+    "Invesco",
+    "Janney Montgomery Scott LLC",
+    "Northern Trust",
+    "SEI",
+    "Macquarie Asset Management",
+    "BNY Mellon",
+    "AllianceBernstein",
+    "Russell Investments"
+    ]
 
 ## Titles should be lowercase as data scrapped from linkedin is converted and read as lowercase text
 TITLES = [
-    "director",
-    "vp",
-    "vice president",
-    "managing director",
-    "managing partner",
-    "head of sales",
-    "wholesaler",
-    "analyst",
-    "relationship management",
-    "associate",
-    "senior director",
-    "executive director",
+    "head of distribution",
     "head of",
-    "senior vp",
-    "senior vice president",
-    "consultant",
-    "strategist",
-    "trader",
-    "sales",
-    "advisor",
-    "manager",
-    "senior",
-    "lead"
+    "regional director",
+    "national accounts",
+    "national account manager",
+    "chief marketing officer",
+    "head of",
+    "vice president",
+    "executive",
+    "chief of",
+    "cmo",
+    "chief marketing officer",
+    "chief",
+    "director",
+    "",
 ]
 
-KEYWORDS = ["asset management"]
+KEYWORDS = []
 
 
 def main():
     # Create data directory if it doesn't exist
     os.makedirs("data", exist_ok=True)
 
-    driver = init_driver()
+    driver = init_driver(headless=False)    # Change to true to make headless scrapping
 
     # Log in to LinkedIn
     login_to_linkedin(driver)
@@ -53,7 +64,7 @@ def main():
         print(f"{'=' * 50}")
 
         jobs = search_jobs_for_company(driver, company, TITLES, KEYWORDS,
-                                       use_ai_search=False)  # Try regular search first - use_ai_search=False
+                                       use_ai_search=False, max_results=12, max_descriptions=8)  # Try regular search first - use_ai_search=False
         all_jobs.extend(jobs)
 
         print(f"Total jobs found so far: {len(all_jobs)}")
