@@ -54,7 +54,7 @@ def main():
     driver = init_driver(headless=False)    # Change to true to make headless scrapping
 
     # Log in to LinkedIn
-    login_to_linkedin(driver)
+    # login_to_linkedin(driver)
 
     all_jobs = []
 
