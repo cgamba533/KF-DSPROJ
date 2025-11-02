@@ -184,7 +184,7 @@ def debug_scroll_state(driver):
     print(f"   Current job cards visible: {job_count}\n")
 
 
-def scroll_and_load_all_jobs(driver, max_jobs=30, max_attempts=12):
+def scroll_and_load_all_jobs(driver, max_jobs=30, max_attempts=6):
     """
     Aggressively scroll the job list to load as many jobs as possible BEFORE processing any.
 

@@ -44,7 +44,15 @@ TITLES = [
     "",
 ]
 
-KEYWORDS = []
+
+# (head of distribution OR head of OR regional director, OR national accounts OR national account manager, OR chief marketing officer OR head of OR vice president OR executive OR chief of OR cmo OR chief marketing officer OR chief OR director) NOT internship NOT analyst NOT associate NOT assistant
+
+#  AND ("head of distribution" OR "regional director" OR "national accounts" OR "national account manager" OR "chief marketing officer" OR "vice president" OR "executive" OR "chief" OR "director") NOT (intern OR internship OR analyst OR associate OR assistant)
+
+#  AND (head of distribution OR regional director OR national accounts OR national account manager OR chief marketing officer OR vice president OR executive OR chief OR director OR managing director) NOT (intern OR internship OR analyst OR associate OR assistant)
+
+
+KEYWORDS = ["AND (head of distribution OR regional director OR national accounts OR national account manager OR chief marketing officer OR vice president OR executive OR chief OR director OR managing director) NOT (intern OR internship OR analyst OR associate OR assistant)"]
 
 
 def main():
