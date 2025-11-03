@@ -3,6 +3,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
+import random
 
 
 def extract_job_description(driver, job_url):
@@ -147,314 +148,135 @@ def extract_job_description(driver, job_url):
     return description_text, posted_date
 
 
-def debug_scroll_state(driver):
+def improved_scroll_and_load(driver, target_jobs=15, max_scroll_attempts=20):
     """
-    Debug function to see what elements are scrollable on the page.
-    """
-    print("\n🔍 DEBUG - Checking scrollable elements:")
-
-    script = """
-    var elements = document.querySelectorAll('ul, div[class*="list"], div[class*="scaffold"]');
-    var info = [];
-    elements.forEach(function(el) {
-        if (el.scrollHeight > el.clientHeight) {
-            info.push({
-                tag: el.tagName,
-                classes: el.className.substring(0, 50),
-                scrollHeight: el.scrollHeight,
-                clientHeight: el.clientHeight,
-                scrollTop: el.scrollTop
-            });
-        }
-    });
-    return info;
-    """
-
-    try:
-        scrollable = driver.execute_script(script)
-        print(f"   Found {len(scrollable)} scrollable elements:")
-        for i, el in enumerate(scrollable[:5]):  # Show first 5
-            print(f"   [{i + 1}] {el['tag']}.{el['classes'][:30]}...")
-            print(f"       ScrollHeight: {el['scrollHeight']}, ClientHeight: {el['clientHeight']}")
-    except Exception as e:
-        print(f"   ❌ Debug error: {e}")
-
-    # Check job count
-    job_count = len(driver.find_elements(By.CSS_SELECTOR, "[data-job-id]"))
-    print(f"   Current job cards visible: {job_count}\n")
-
-
-def scroll_and_load_all_jobs(driver, max_jobs=30, max_attempts=6):
-    """
-    Aggressively scroll the job list to load as many jobs as possible BEFORE processing any.
+    IMPROVED: Aggressive scrolling with job clicking to trigger LinkedIn's lazy loading.
+    This is the most reliable method for LinkedIn's current implementation.
 
     Args:
-        max_jobs: Stop when this many jobs are loaded (default: 30)
-        max_attempts: Stop after this many failed scroll attempts (default: 12)
-
-    Returns:
-        Number of job cards loaded
+        target_jobs: Number of jobs we want to load (default: 15)
+        max_scroll_attempts: Maximum scroll iterations (default: 20)
     """
-    print(f"\n🔄 Starting aggressive scroll to load up to {max_jobs} job cards...")
-    print(f"   Will stop after {max_attempts} consecutive scrolls with no new jobs\n")
+    print(f"\n🔄 Starting IMPROVED scroll to load {target_jobs} jobs...")
 
-    consecutive_no_change = 0
-    scroll_count = 0
+    def count_visible_jobs():
+        """Count currently visible job cards"""
+        return len(
+            driver.find_elements(By.CSS_SELECTOR, "li[data-occludable-job-id], .job-card-container, [data-job-id]"))
 
-    # Wait for initial jobs to load
+    # Wait for initial load
     try:
         WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "[data-job-id]"))
+            EC.presence_of_element_located((By.CSS_SELECTOR, "li[data-occludable-job-id], [data-job-id]"))
         )
         time.sleep(2)
-    except:
-        print("   ⚠️  Initial job load timeout")
+    except TimeoutException:
+        print("   ⚠️ Initial job load timeout")
 
-    # Run debug to understand page structure
-    debug_scroll_state(driver)
+    previous_count = count_visible_jobs()
+    print(f"   Initial jobs loaded: {previous_count}")
 
-    while consecutive_no_change < max_attempts:
-        # Count current jobs
-        job_cards_before = driver.find_elements(By.CSS_SELECTOR, "[data-job-id]")
-        count_before = len(job_cards_before)
+    stagnant_count = 0
 
-        scroll_success = False
-
-        # Strategy 1: Find and scroll the UL container (most reliable for LinkedIn)
+    for attempt in range(max_scroll_attempts):
+        # Strategy 1: Click on the last visible job (triggers loading)
         try:
-            # Target the actual job list container
-            ul_selectors = [
-                "ul.scaffold-layout__list-container",
-                "ul[class*='jobs-search-results']",
-                "ul.jobs-search-results__list",
-                "div.jobs-search-results-list"
-            ]
-
-            for selector in ul_selectors:
-                containers = driver.find_elements(By.CSS_SELECTOR, selector)
-
-                for container in containers:
-                    try:
-                        # Check if element is actually scrollable
-                        scroll_height = driver.execute_script("return arguments[0].scrollHeight;", container)
-                        client_height = driver.execute_script("return arguments[0].clientHeight;", container)
-
-                        if scroll_height > client_height:
-                            # Get current scroll position
-                            current_scroll = driver.execute_script("return arguments[0].scrollTop;", container)
-
-                            # Scroll down by a large amount (2000px)
-                            driver.execute_script("arguments[0].scrollTop = arguments[0].scrollTop + 2000;", container)
-                            time.sleep(1.5)
-
-                            # Check if scroll actually happened
-                            new_scroll = driver.execute_script("return arguments[0].scrollTop;", container)
-
-                            if new_scroll > current_scroll:
-                                scroll_success = True
-                                scroll_count += 1
-                                print(
-                                    f"   Scroll #{scroll_count}: Scrolled {selector} by {new_scroll - current_scroll}px (total: {new_scroll}px)")
-                                break
-                    except Exception as e:
-                        continue
-
-                if scroll_success:
-                    break
-
-            if scroll_success:
-                # Wait longer for LinkedIn to load new content
-                time.sleep(3)
-
-        except Exception as e:
-            print(f"   ⚠️  Strategy 1 (UL scroll) failed: {e}")
-
-        # Strategy 2: Scroll to last visible job card
-        if not scroll_success and job_cards_before:
-            try:
-                # Get the last job card
-                last_card = job_cards_before[-1]
-
-                # Scroll the card into view
-                driver.execute_script("""
-                    arguments[0].scrollIntoView({behavior: 'auto', block: 'end'});
-                """, last_card)
-
-                scroll_success = True
-                scroll_count += 1
-                print(f"   Scroll #{scroll_count}: Scrolled to last job card (Strategy 2)")
-                time.sleep(2.5)
-
-            except Exception as e:
-                print(f"   ⚠️  Strategy 2 (scroll to card) failed: {e}")
-
-        # Strategy 3: Use JavaScript to scroll ANY scrollable container
-        if not scroll_success:
-            try:
-                # Try to find ANY scrollable parent
-                driver.execute_script("""
-                    var scrolled = false;
-                    var selectors = [
-                        '.scaffold-layout__list',
-                        '.jobs-search-results-list',
-                        'ul.scaffold-layout__list-container',
-                        '[role="main"]'
-                    ];
-
-                    for (var i = 0; i < selectors.length; i++) {
-                        var elements = document.querySelectorAll(selectors[i]);
-                        for (var j = 0; j < elements.length; j++) {
-                            var elem = elements[j];
-                            if (elem.scrollHeight > elem.clientHeight) {
-                                elem.scrollTop += 2000;
-                                scrolled = true;
-                                break;
-                            }
-                        }
-                        if (scrolled) break;
-                    }
-                    return scrolled;
-                """)
-
-                scroll_success = True
-                scroll_count += 1
-                print(f"   Scroll #{scroll_count}: JavaScript generic scroll (Strategy 3)")
-                time.sleep(2.5)
-
-            except Exception as e:
-                print(f"   ⚠️  Strategy 3 (JS scroll) failed: {e}")
-
-        # Strategy 4: Window scroll as last resort
-        if not scroll_success:
-            try:
-                current_y = driver.execute_script("return window.pageYOffset;")
-                driver.execute_script("window.scrollBy(0, 1500);")
-                new_y = driver.execute_script("return window.pageYOffset;")
-
-                if new_y > current_y:
-                    scroll_count += 1
-                    print(
-                        f"   Scroll #{scroll_count}: Window scroll by {new_y - current_y}px (Strategy 4 - last resort)")
-                    time.sleep(2)
-                else:
-                    print(f"   ⚠️  Window scroll didn't move")
-            except Exception as e:
-                print(f"   ⚠️  Strategy 4 (window scroll) failed: {e}")
-
-        # Wait a bit more for content to load
-        time.sleep(2)
-
-        # Count jobs after scroll
-        job_cards_after = driver.find_elements(By.CSS_SELECTOR, "[data-job-id]")
-        count_after = len(job_cards_after)
-
-        # Check if we loaded new jobs
-        new_jobs = count_after - count_before
-
-        if new_jobs > 0:
-            print(f"   ✓ Loaded {new_jobs} new job cards! Total: {count_after}")
-            consecutive_no_change = 0
-        else:
-            consecutive_no_change += 1
-            print(f"   ⚠️  No new jobs loaded (attempt {consecutive_no_change}/{max_attempts}). Total: {count_after}")
-
-        # Check if we've reached our target
-        if count_after >= max_jobs:
-            print(f"\n   🎯 Target reached! Loaded {count_after} job cards (target was {max_jobs})")
-            break
-
-        # If we're stuck, try debug again
-        if consecutive_no_change == 3:
-            print("\n   🔍 Stuck loading jobs, running debug...")
-            debug_scroll_state(driver)
-
-    final_count = len(driver.find_elements(By.CSS_SELECTOR, "[data-job-id]"))
-
-    if consecutive_no_change >= max_attempts:
-        print(f"\n   ⛔ Stopped scrolling after {max_attempts} attempts with no new jobs")
-
-    print(f"\n✅ Scrolling complete! Total job cards available: {final_count}\n")
-    return final_count
-
-
-def scroll_with_interaction(driver, max_jobs=30, max_attempts=12):
-    """
-    Alternative scrolling method that simulates more human-like behavior.
-    Clicks on jobs to trigger LinkedIn's lazy loading mechanism.
-
-    Args:
-        max_jobs: Stop when this many jobs are loaded (default: 30)
-        max_attempts: Stop after this many failed scroll attempts (default: 12)
-
-    Returns:
-        Number of job cards loaded
-    """
-    print(f"\n🔄 Starting INTERACTIVE scroll to load up to {max_jobs} job cards...")
-    print(f"   This method clicks jobs to trigger loading\n")
-
-    consecutive_no_change = 0
-    scroll_count = 0
-
-    # Wait for initial jobs
-    try:
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "[data-job-id]"))
-        )
-        time.sleep(2)
-    except:
-        print("   ⚠️  Initial job load timeout")
-
-    while consecutive_no_change < max_attempts:
-        job_cards_before = driver.find_elements(By.CSS_SELECTOR, "[data-job-id]")
-        count_before = len(job_cards_before)
-
-        if job_cards_before:
-            try:
-                # Click on the last visible job to trigger loading
-                last_card = job_cards_before[-1]
-                driver.execute_script("arguments[0].click();", last_card)
+            job_cards = driver.find_elements(By.CSS_SELECTOR,
+                                             "li[data-occludable-job-id], .job-card-container, [data-job-id]")
+            if job_cards:
+                last_job = job_cards[-1]
+                driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", last_job)
                 time.sleep(1)
+                driver.execute_script("arguments[0].click();", last_job)
+                print(f"   ✓ Clicked job {len(job_cards)}")
+                time.sleep(2)
+        except Exception as e:
+            print(f"   ⚠️ Could not click job: {e}")
 
-                # Then scroll the container
-                driver.execute_script("""
-                    var containers = document.querySelectorAll('ul.scaffold-layout__list-container, div.jobs-search-results-list');
-                    for (var i = 0; i < containers.length; i++) {
-                        if (containers[i].scrollHeight > containers[i].clientHeight) {
-                            containers[i].scrollTop += 1500;
-                            break;
-                        }
-                    }
-                """)
+        # Strategy 2: Scroll the jobs list container
+        scroll_script = """
+        // Find the scrollable container
+        let containers = document.querySelectorAll(
+            'div.jobs-search-results-list, ' +
+            'ul.scaffold-layout__list-container, ' +
+            'div.scaffold-layout__list-container, ' +
+            'div[class*="jobs-search-results"]'
+        );
 
-                time.sleep(2.5)
-                scroll_count += 1
+        let scrolled = false;
+        for (let container of containers) {
+            if (container.scrollHeight > container.clientHeight) {
+                container.scrollBy(0, 800);
+                scrolled = true;
+                break;
+            }
+        }
 
-            except Exception as e:
-                print(f"   ⚠️  Interaction scroll error: {e}")
+        // Fallback: scroll window
+        if (!scrolled) {
+            window.scrollBy(0, 800);
+        }
+
+        return scrolled;
+        """
+
+        try:
+            container_scrolled = driver.execute_script(scroll_script)
+            if container_scrolled:
+                print(f"   ✓ Scrolled container")
+            else:
+                print(f"   ✓ Scrolled window (fallback)")
+        except Exception as e:
+            print(f"   ⚠️ Scroll error: {e}")
+
+        # Wait for LinkedIn to load more jobs
+        time.sleep(3)
 
         # Check progress
-        time.sleep(2)
-        job_cards_after = driver.find_elements(By.CSS_SELECTOR, "[data-job-id]")
-        count_after = len(job_cards_after)
-        new_jobs = count_after - count_before
+        current_count = count_visible_jobs()
+        new_jobs = current_count - previous_count
 
-        if new_jobs > 0:
-            print(f"   ✓ Scroll #{scroll_count}: Loaded {new_jobs} new jobs! Total: {count_after}")
-            consecutive_no_change = 0
+        print(f"   Scroll #{attempt + 1}: {current_count} jobs visible (+{new_jobs} new)")
+
+        # Check if we've reached target
+        if current_count >= target_jobs:
+            print(f"\n✅ Target reached! {current_count} jobs loaded")
+            return current_count
+
+        # Check if we're stuck
+        if current_count == previous_count:
+            stagnant_count += 1
+
+            if stagnant_count >= 3:
+                # Try aggressive recovery
+                print(f"   ⚠️ No progress after {stagnant_count} attempts, trying recovery...")
+
+                # Try scrolling to top then bottom
+                driver.execute_script("window.scrollTo(0, 0);")
+                time.sleep(1)
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                time.sleep(3)
+
+                # Check again
+                recovery_count = count_visible_jobs()
+                if recovery_count > current_count:
+                    print(f"   ✓ Recovery successful! Now at {recovery_count} jobs")
+                    current_count = recovery_count
+                    stagnant_count = 0
+                elif stagnant_count >= 5:
+                    print(f"   ⚠️ Stuck at {current_count} jobs, stopping scroll")
+                    break
         else:
-            consecutive_no_change += 1
-            print(f"   ⚠️  No new jobs (attempt {consecutive_no_change}/{max_attempts})")
+            stagnant_count = 0
 
-        if count_after >= max_jobs:
-            print(f"\n   🎯 Target reached: {count_after} jobs")
-            break
+        previous_count = current_count
 
-    final_count = len(driver.find_elements(By.CSS_SELECTOR, "[data-job-id]"))
-    print(f"\n✅ Interactive scroll complete! Loaded {final_count} total job cards\n")
+    final_count = count_visible_jobs()
+    print(f"\n📊 Scroll complete: {final_count} jobs loaded (target was {target_jobs})")
     return final_count
 
 
-def search_jobs_for_company(driver, company, titles, keywords, max_results=30, use_ai_search=False, max_descriptions=10,
+def search_jobs_for_company(driver, company, titles, keywords, max_results=15, use_ai_search=False, max_descriptions=10,
                             location="United States", use_interactive_scroll=False):
     """
     Search for jobs at a specific company and filter by titles
@@ -464,12 +286,12 @@ def search_jobs_for_company(driver, company, titles, keywords, max_results=30, u
         company: Company name to search for
         titles: List of job titles to filter by
         keywords: Additional keywords for search
-        max_results: Maximum number of job cards to process (default: 30)
+        max_results: Maximum number of job cards to process (default: 15)
         use_ai_search: Use LinkedIn AI search mode (default: False)
         max_descriptions: Maximum number of job descriptions to extract (default: 10)
                          Set to None to extract all descriptions
         location: Location filter for job search (default: "United States")
-        use_interactive_scroll: Use interactive scroll method instead of default (default: False)
+        use_interactive_scroll: DEPRECATED - now uses improved scroll by default
 
     Returns:
         List of job dictionaries with job information
@@ -486,32 +308,28 @@ def search_jobs_for_company(driver, company, titles, keywords, max_results=30, u
     print(f"Searching: {search_url}")
     print(f"Location: {location}")
     print(f"Using {'AI' if use_ai_search else 'Regular'} search mode")
-    print(f"Scroll method: {'Interactive' if use_interactive_scroll else 'Standard'}")
     driver.get(search_url)
 
     # Wait for page to load
     try:
         WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "[data-job-id]"))
+            EC.presence_of_element_located((By.CSS_SELECTOR, "[data-job-id], li[data-occludable-job-id]"))
         )
     except:
         print("Page load timeout, continuing anyway...")
 
     time.sleep(3)
 
-    # STEP 1: SCROLL TO LOAD ALL JOBS FIRST (before processing any)
-    if use_interactive_scroll:
-        total_loaded = scroll_with_interaction(driver, max_jobs=max_results, max_attempts=12)
-    else:
-        total_loaded = scroll_and_load_all_jobs(driver, max_jobs=max_results, max_attempts=12)
+    # STEP 1: SCROLL TO LOAD JOBS (using improved method)
+    total_loaded = improved_scroll_and_load(driver, target_jobs=max_results, max_scroll_attempts=20)
 
     # STEP 2: NOW get all the job cards
     selectors = [
+        "li[data-occludable-job-id]",
         "[data-job-id]",
         ".jobs-search-results__list-item",
         ".base-card",
         ".job-card-container",
-        "li[data-occludable-job-id]",
     ]
 
     job_cards = []
