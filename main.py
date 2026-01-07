@@ -1,29 +1,32 @@
-from utils.linkedin_login import init_driver, login_to_linkedin
-from utils.scrape_jobs import search_jobs_for_company
+from utils_old.linkedin_login import init_driver, login_to_linkedin
+from utils_old.scrape_jobs import search_jobs_for_company
 import pandas as pd
 import time
 import os
 
 COMPANIES = [
     "Royal Bank of Canada",
-    "TCW",
-    "Lincoln Financial",
-    "Natixis",
-    "AssetMark",
-    "Aristotle",
-    "Pathstone",
-    "Fidelity",
-    "Orion",
-    "NEPC",
-    "Invesco",
-    "Janney Montgomery Scott LLC",
-    "Northern Trust",
-    "SEI",
-    "Macquarie Asset Management",
-    "BNY Mellon",
-    "AllianceBernstein",
-    "Russell Investments"
-    ]
+    # "TCW",
+    # "Lincoln Financial",
+    # "Natixis",
+    # "AssetMark",
+    # "Aristotle",
+    # "Pathstone",
+    # "Fidelity",
+    # "Orion",
+    # "NEPC",
+    # "Invesco",
+    # "Janney Montgomery Scott LLC",
+    # "Northern Trust",
+    # "SEI",
+    # "Macquarie Asset Management",
+    # "BNY Mellon",
+    # "AllianceBernstein",
+    # "Russell Investments"
+]
+
+# COMPANIES = ["Royal Bank of Canada", "TCW", "Lincoln Financial", "Natixis", "AssetMark", "Aristotle", "Pathstone", "Fidelity", "Orion", "NEPC", "Invesco", "Janney Montgomery Scott LLC", "Northern Trust", "SEI", "Macquarie Asset Management", "BNY Mellon", "AllianceBernstein", "Russell Investments", "NASDAQ", "JP Morgan", "Wells Fargo", "Apollo Global Management", "T. Rowe Price", "Capital Group", "Blackrock", "Vanguard", "Morgan Stanley", "Invesco", "Wellington Management", "Franklin Templeton", "KKR", "Oaktree Capital Management", "Voya Investment Management", "PIMCO", "Guggenheim Investments", "Principal Global Investments", "Brown Advisory" ]
+
 
 ## Titles should be lowercase as data scrapped from linkedin is converted and read as lowercase text
 TITLES = [
@@ -52,7 +55,7 @@ TITLES = [
 #  AND (head of distribution OR regional director OR national accounts OR national account manager OR chief marketing officer OR vice president OR executive OR chief OR director OR managing director) NOT (intern OR internship OR analyst OR associate OR assistant)
 
 
-KEYWORDS = ["AND (head of distribution OR regional director OR national accounts OR national account manager OR chief marketing officer OR vice president OR executive OR chief OR director OR managing director) NOT (intern OR internship OR analyst OR associate OR assistant)"]
+KEYWORDS = ["AND (head of distribution OR regional director OR national accounts OR national account manager OR chief marketing officer OR vice president OR executive OR chief OR director OR managing director OR asset management) NOT (intern OR internship OR analyst OR associate OR assistant)"]
 
 
 def main():
@@ -62,7 +65,7 @@ def main():
     driver = init_driver(headless=False)    # Change to true to make headless scrapping
 
     # Log in to LinkedIn
-    login_to_linkedin(driver)
+    #login_to_linkedin(driver)
 
     all_jobs = []
 
@@ -72,7 +75,7 @@ def main():
         print(f"{'=' * 50}")
 
         jobs = search_jobs_for_company(driver, company, TITLES, KEYWORDS,
-                                       use_ai_search=False, max_results=12, max_descriptions=8)  # Try regular search first - use_ai_search=False
+                                       use_ai_search=True, max_results=5, max_descriptions=5)  # Try regular search first - use_ai_search=False
         all_jobs.extend(jobs)
 
         print(f"Total jobs found so far: {len(all_jobs)}")

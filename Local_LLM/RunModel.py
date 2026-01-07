@@ -8,7 +8,7 @@ import pandas as pd
 
 client = ollama.Client()
 
-df = pd.read_csv("jobs_2025-10-17-test.csv")
+df = pd.read_csv("jobs_2025-10-17-test_void.csv")
 
 def classify_job(row):
     prompt = (
@@ -18,7 +18,7 @@ def classify_job(row):
         f"Description: {row['Description']}\n"
         f"Does this job fit my criteria? Answer with 1 for yes, 0 for no."
     )
-    response = client.generate(model="baseModel_gemma", prompt=prompt)
+    response = client.generate(model="gemma3-4b-finetune", prompt=prompt)
     return response["response"].strip()
 
 df["Predicted"] = df.apply(classify_job, axis=1)

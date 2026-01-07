@@ -296,8 +296,9 @@ def search_jobs_for_company(driver, company, titles, keywords, max_results=15, u
     Returns:
         List of job dictionaries with job information
     """
-    search_query = f"{company} {' '.join(keywords)}"
-    encoded_query = search_query.replace(' ', '%20')
+    # Use LinkedIn's company filter by wrapping company name in quotes for exact match
+    search_query = f'"{company}" {" ".join(keywords)}'
+    encoded_query = search_query.replace(' ', '%20').replace('"', '%22')
     encoded_location = location.replace(' ', '%20').replace(',', '%2C')
 
     if use_ai_search:
@@ -308,6 +309,7 @@ def search_jobs_for_company(driver, company, titles, keywords, max_results=15, u
     print(f"Searching: {search_url}")
     print(f"Location: {location}")
     print(f"Using {'AI' if use_ai_search else 'Regular'} search mode")
+    print(f"Using exact company match with quotes: \"{company}\"")
     driver.get(search_url)
 
     # Wait for page to load
@@ -401,28 +403,103 @@ def search_jobs_for_company(driver, company, titles, keywords, max_results=15, u
                 print(f"   ✗ No title match for: '{title_text}'")
                 continue
 
-            # Extract job details
-            company_text = company
-            location_text = "N/A"
-            posted_text = "N/A"
-            job_url = "N/A"
+            # Extract company name from job card
+            company_text = "N/A"
 
+            # Strategy 1: Try specific company selectors (avoiding title elements)
+            company_selectors = [
+                "h4.base-search-card__subtitle",  # Most common for company
+                ".base-search-card__subtitle a",
+                "a.hidden-nested-link",
+                "span.job-card-container__primary-description"
+            ]
+
+            for company_sel in company_selectors:
+                try:
+                    company_elem = card.find_element(By.CSS_SELECTOR, company_sel)
+                    extracted_company = company_elem.text.strip()
+
+                    # Make sure it's not the title and not metadata
+                    if (extracted_company and
+                            extracted_company != title_text and
+                            extracted_company.lower() != title_text.lower() and
+                            not any(word in extracted_company.lower() for word in
+                                    ['ago', 'hour', 'day', 'week', 'month', 'applicant',
+                                     'reposted', 'promoted', 'be an early'])):
+                        company_text = extracted_company
+                        print(f"   ✓ Extracted company using selector '{company_sel}': {company_text}")
+                        break
+                except:
+                    continue
+
+            # Strategy 2: Parse from card text structure
+            if company_text == "N/A":
+                try:
+                    card_lines = [line.strip() for line in card.text.split('\n') if line.strip()]
+                    print(f"   📋 Card lines for debugging: {card_lines[:6]}")
+
+                    # Company name is typically the line immediately after the title
+                    # Find the title line index first
+                    title_idx = -1
+                    for idx, line in enumerate(card_lines):
+                        if line == title_text:
+                            title_idx = idx
+                            break
+
+                    if title_idx != -1 and title_idx + 1 < len(card_lines):
+                        potential_company = card_lines[title_idx + 1]
+
+                        # Validate it's not location, date, or other metadata
+                        if (potential_company and
+                                ',' not in potential_company and  # Location has comma
+                                not any(word in potential_company.lower() for word in
+                                        ['ago', 'hour', 'day', 'week', 'month', '$', 'applicant',
+                                         'reposted', 'promoted', 'viewed', 'verification'])):
+                            company_text = potential_company
+                            print(f"   ✓ Parsed company from line after title: {company_text}")
+
+                    # If still not found, look for first non-title, non-location line
+                    if company_text == "N/A":
+                        for line in card_lines[1:6]:
+                            if (line and
+                                    line != title_text and
+                                    ',' not in line and
+                                    not any(word in line.lower() for word in
+                                            ['ago', 'hour', 'day', 'week', 'month', '$', 'applicant',
+                                             'reposted', 'promoted', 'viewed', 'verification', 'easy apply'])):
+                                company_text = line
+                                print(f"   ✓ Parsed company from first valid line: {company_text}")
+                                break
+
+                except Exception as e:
+                    print(f"   ⚠️ Could not parse company from card text: {e}")
+
+            # Last resort: use the search company parameter
+            if company_text == "N/A":
+                company_text = company
+                print(f"   ⚠️ Using search company as fallback: {company_text}")
+
+            # Extract location
+            location_text = "N/A"
             try:
                 card_lines = [line.strip() for line in card.text.split('\n') if line.strip()]
 
-                for idx, line in enumerate(card_lines[1:4], start=1):
-                    if line and line != title_text and 'verification' not in line.lower():
-                        if not any(word in line.lower() for word in
-                                   ['viewed', 'ago', 'hour', 'day', 'week', 'month', '$', 'applicant']):
-                            if ',' in line:
-                                location_text = line
-                                break
-                            elif idx == 1 and line != company:
-                                company_text = line
+                for idx, line in enumerate(card_lines[1:6], start=1):
+                    if line and line != title_text and line != company_text:
+                        # Location usually has a comma (city, state)
+                        if ',' in line and not any(word in line.lower() for word in
+                                                   ['viewed', 'ago', 'hour', 'day', 'week', 'month', '$', 'applicant']):
+                            location_text = line
+                            print(f"   ✓ Found location: {location_text}")
+                            break
             except:
                 pass
 
+            # Extract posted date
+            posted_text = "N/A"
+
             # Extract job URL
+            job_url = "N/A"
             for link_sel in [
                 "a[href*='/jobs/view/']",
                 ".base-card__full-link",
