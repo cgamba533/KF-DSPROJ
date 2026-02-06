@@ -58,7 +58,7 @@ def init_driver(headless=False):
         driver = uc.Chrome(
             options=options,
             use_subprocess=True,
-            version_main=None,  # Auto-detect Chrome version
+            version_main=143,  # Auto-detect Chrome version
             headless=headless
         )
 

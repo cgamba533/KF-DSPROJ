@@ -35,7 +35,7 @@ KEYWORDS = [
 
 EXCLUDE_KEYWORDS = ["intern", "internship"]
 
-MODEL_NAME = "gemma3-4b-finetune"
+MODEL_NAME = "gemma3-4b-finetune"  # gemma3-4b-finetune or baseModel_gemma (12b param)
 
 def get_unique_filename(base_path="data", prefix="indeed_jobs"):
     """Generates a unique filename with a timestamp."""
@@ -185,15 +185,26 @@ def run_classification_phase(input_csv_path):
         # Fallback if tqdm not installed
         df["Predicted"] = df.apply(lambda row: classify_job_row(client, row), axis=1)
 
+    print("\n🧹 Filtering for relevant jobs (Classified as '1')...")
+
+    total_jobs = len(df)
+
+    # We use .astype(str) and .contains('1') to be robust against "1", "1 ", "1\n", etc.
+    df_filtered = df[df['Predicted'].astype(str).str.contains('1', na=False)].copy()
+
+    kept_jobs = len(df_filtered)
+    dropped_jobs = total_jobs - kept_jobs
+
     # Save Results
     # We create a new filename for the classified version
     base, ext = os.path.splitext(input_csv_path)
     output_filename = f"{base}_CLASSIFIED{ext}"
 
-    df.to_csv(output_filename, index=False)
+    df_filtered.to_csv(output_filename, index=False)
 
     print(f"\n✅ CLASSIFICATION COMPLETE")
-    print(f"💾 Results saved to: {output_filename}")
+    print(f"📉 Dropped {dropped_jobs} irrelevant jobs (labeled '0').")
+    print(f"💾 Saved {kept_jobs} relevant jobs to: {output_filename}")
 
     # Print a quick preview of "Yes" (1) results
     yes_jobs = df[df['Predicted'].astype(str).str.contains('1', na=False)]
