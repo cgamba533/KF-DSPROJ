@@ -41,3 +41,16 @@ COMPANIES = [
     "Principal Global Investments",
     "Brown Advisory"
     ]
+
+
+File Info:
+
+setup_login.py: run when using program for first time to initate scrapping tool.
+
+indeed_pipeline_main.py: Initates complete pipeline using Indeed scrapper and Gemma3-12B model.
+
+main_indeed.py: runs Indeed scrapper only
+
+Local_LLM/RunModel.py: run LLM only
+
+
