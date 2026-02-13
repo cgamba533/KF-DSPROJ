@@ -54,3 +54,10 @@ main_indeed.py: runs Indeed scrapper only
 Local_LLM/RunModel.py: run LLM only
 
 
+Run and initiate Modelfile:
+
+1. cd to directory with Modelfile
+2. Get base model: "ollama run gemma3:12b"
+3. "ollama create baseModel_gemma -f Modelfile"
+4.  verify creation: "ollama run baseModel_gemma"
+
